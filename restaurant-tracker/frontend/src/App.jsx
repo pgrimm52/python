@@ -5,7 +5,7 @@ import RestaurantList from './components/RestaurantList.jsx'
 import RestaurantForm from './components/RestaurantForm.jsx'
 import CategoryFilter from './components/CategoryFilter.jsx'
 
-const API_BASE = '/api/restaurants'
+const API_BASE = (import.meta.env.VITE_API_URL || '/api') + '/restaurants'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('map')

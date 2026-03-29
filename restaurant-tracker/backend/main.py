@@ -1,10 +1,13 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 import math
+import os
 
 from database import engine, get_db, Base
 import models
@@ -78,7 +81,7 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * c
 
 
-@app.get("/restaurants", response_model=List[RestaurantResponse])
+@app.get("/api/restaurants", response_model=List[RestaurantResponse])
 def list_restaurants(
     category: Optional[str] = Query(None),
     visited: Optional[bool] = Query(None),
@@ -92,7 +95,7 @@ def list_restaurants(
     return query.order_by(models.Restaurant.created_at.desc()).all()
 
 
-@app.get("/restaurants/nearby", response_model=List[RestaurantResponse])
+@app.get("/api/restaurants/nearby", response_model=List[RestaurantResponse])
 def get_nearby_restaurants(
     lat: float = Query(...),
     lng: float = Query(...),
@@ -113,7 +116,7 @@ def get_nearby_restaurants(
     return nearby
 
 
-@app.get("/restaurants/{restaurant_id}", response_model=RestaurantResponse)
+@app.get("/api/restaurants/{restaurant_id}", response_model=RestaurantResponse)
 def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
     restaurant = db.query(models.Restaurant).filter(
         models.Restaurant.id == restaurant_id
@@ -123,7 +126,7 @@ def get_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
     return restaurant
 
 
-@app.post("/restaurants", response_model=RestaurantResponse, status_code=201)
+@app.post("/api/restaurants", response_model=RestaurantResponse, status_code=201)
 def create_restaurant(restaurant: RestaurantCreate, db: Session = Depends(get_db)):
     if restaurant.category not in VALID_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"Invalid category. Must be one of: {', '.join(VALID_CATEGORIES)}")
@@ -135,7 +138,7 @@ def create_restaurant(restaurant: RestaurantCreate, db: Session = Depends(get_db
     return db_restaurant
 
 
-@app.put("/restaurants/{restaurant_id}", response_model=RestaurantResponse)
+@app.put("/api/restaurants/{restaurant_id}", response_model=RestaurantResponse)
 def update_restaurant(
     restaurant_id: int,
     restaurant: RestaurantUpdate,
@@ -159,7 +162,7 @@ def update_restaurant(
     return db_restaurant
 
 
-@app.delete("/restaurants/{restaurant_id}", status_code=204)
+@app.delete("/api/restaurants/{restaurant_id}", status_code=204)
 def delete_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
     db_restaurant = db.query(models.Restaurant).filter(
         models.Restaurant.id == restaurant_id
@@ -170,3 +173,13 @@ def delete_restaurant(restaurant_id: int, db: Session = Depends(get_db)):
     db.delete(db_restaurant)
     db.commit()
     return None
+
+
+# Serve frontend static files (when built for production)
+static_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(static_dir):
+    app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        return FileResponse(os.path.join(static_dir, "index.html"))
